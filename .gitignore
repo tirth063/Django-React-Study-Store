@@ -1,0 +1,97 @@
+######################################
+# GENERAL
+######################################
+*.log
+*.pid
+*.seed
+*.sqlite3
+*.sqlite3-journal
+.env
+.env.*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+######################################
+# PYTHON / DJANGO
+######################################
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+.virtualenv/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+static/
+*.mo
+*.pot
+
+# Django migrations (optional – keep if team project)
+# **/migrations/
+# !**/migrations/__init__.py
+
+######################################
+# DJANGO SETTINGS / SECRETS
+######################################
+*.env
+local_settings.py
+settings_local.py
+
+######################################
+# PYTHON PACKAGING
+######################################
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+######################################
+# REACT / NODE
+######################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# React build output
+build/
+dist/
+
+# Vite / CRA cache
+.cache/
+.parcel-cache/
+.vite/
+
+######################################
+# TEST / COVERAGE
+######################################
+htmlcov/
+.coverage
+coverage.xml
+pytest_cache/
+.tox/
+
+######################################
+# IDE / EDITOR
+######################################
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+######################################
+# OS FILES
+######################################
+.DS_Store
+Thumbs.db
