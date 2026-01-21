@@ -1,206 +1,169 @@
-# views.py
-from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from django.db import transaction
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from rest_framework import generics
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import Product, Like, Comment, Notification, Transaction
+from .serializers import ProductSerializer, RegisterSerializer, NotificationSerializer
+from .permissions import IsOwner
+
 
 class RegisterAPIView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        try:
-            username = request.data.get('username')
-            email = request.data.get('email')
-            password = request.data.get('password')
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
 
-            if not username:
-                return Response({"error": "Username cannot be empty"}, status=400)
+        refresh = RefreshToken.for_user(user)
 
-            if len(username) < 3 or len(username) > 50:
-                return Response(
-                    {"error": "Username must be 3 to 50 characters"},
-                    status=400
-                )
+        return Response({
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "balance": user.profile.balance
+            },
+            "access": str(refresh.access_token),
+            "refresh": str(refresh)
+        }, status=201)
 
-            if User.objects.filter(username=username).exists():
-                return Response({"error": "Username already exists"}, status=400)
 
-            if User.objects.filter(email=email).exists():
-                return Response({"error": "Email already exists"}, status=400)
+class LoginAPIView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        username = request.data.get("username")
+        password = request.data.get("password")
 
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password
+        user = authenticate(username=username, password=password)
+        if not user:
+            return Response({"error": "Invalid credentials"}, status=400)
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "balance": user.profile.balance
+            },
+            "access": str(refresh.access_token),
+            "refresh": str(refresh)
+        })
+
+class PublicProductListAPIView(generics.ListAPIView):
+    queryset = Product.objects.select_related("user").prefetch_related("like_set","comment_set")
+    serializer_class = ProductSerializer
+    permission_classes = [AllowAny]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+class ProductCreateAPIView(generics.CreateAPIView):
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        name = serializer.validated_data["name"]
+
+        if Product.objects.filter(name__iexact=name).exists():
+            raise ValidationError({"name": "Product already exists"})
+
+        serializer.save(user=self.request.user)
+
+class ProductDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+class LikeProduct(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+
+        like, created = Like.objects.get_or_create(
+            user=request.user, product=product
+        )
+
+        if created and product.user != request.user:
+            Notification.objects.create(
+                from_user=request.user,
+                to_user=product.user,
+                message=f"{request.user.username} liked your product"
             )
 
-            return Response({"message": "User registered"}, status=201)
+        return Response({"liked": True})
 
-        except Exception:
+class AddComment(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+
+        Comment.objects.create(
+            user=request.user,
+            product=product,
+            content=request.data.get("content")
+        )
+
+        if product.user != request.user:
+            Notification.objects.create(
+                from_user=request.user,
+                to_user=product.user,
+                message=f"{request.user.username} commented on your product"
+            )
+
+        return Response({"status": "commented"})
+
+class BuyProduct(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        buyer = request.user
+        seller = product.user
+
+        if buyer == seller:
             return Response(
-                {"error": "Invalid input data"},
+                {"error": "You cannot buy your own product"},
                 status=400
             )
 
-class ProductCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+        if buyer.profile.balance < product.price:
+            return Response({"error": "Insufficient balance"}, status=400)
 
-    def post(self, request):
-        try:
-            name = request.data.get('name')
-            price = request.data.get('price')
-            image = request.FILES.get('image')
+        buyer.profile.balance -= product.price
+        seller.profile.balance += product.price
+        buyer.profile.save()
+        seller.profile.save()
 
-            if not name:
-                return Response({"error": "Product name required"}, status=400)
+        Transaction.objects.create(
+            product=product,
+            sender=buyer,
+            receiver=seller,
+            amount=product.price,
+            tx_type="withdraw"
+        )
 
-            if len(name) < 3:
-                return Response({"error": "Product name too short"}, status=400)
+        Notification.objects.create(
+            from_user=buyer,
+            to_user=seller,
+            message=f"{buyer.username} bought your product"
+        )
 
-            if not image:
-                return Response({"error": "Product image is required"}, status=400)
-
-            try:
-                price = float(price)
-                if price <= 0:
-                    return Response({"error": "Price must be greater than 0"}, status=400)
-            except:
-                return Response({"error": "Price must be a number"}, status=400)
-
-            product = Product.objects.create(
-                name=name,
-                price=price,
-                image=image,
-                user=request.user
-            )
-
-            return Response(ProductSerializer(product).data, status=201)
-
-        except Exception:
-            return Response({"error": "Invalid data"}, status=400)
-
-class ProductListAPIView(APIView):
-    def get(self, request):
-        products = Product.objects.all()
-        serializer = ProductSerializer(products, many=True)
-        return Response(serializer.data)
-
-class ProductDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk):
-        try:
-            return Product.objects.get(pk=pk)
-        except Product.DoesNotExist:
-            return None
-
-    def get(self, request, pk):
-        product = self.get_object(pk)
-        if not product:
-            return Response({"error": "Not found"}, status=404)
-
-        serializer = ProductSerializer(product)
-        return Response(serializer.data)
-
-    def put(self, request, pk):
-        product = self.get_object(pk)
-        if not product:
-            return Response({"error": "Not found"}, status=404)
-
-        if product.user != request.user:
-            return Response({"error": "Not allowed"}, status=403)
-
-        name = request.data.get('name')
-        price = request.data.get('price')
-
-        if name:
-            product.name = name
-
-        if price:
-            try:
-                price = float(price)
-                if price <= 0:
-                    return Response({"error": "Invalid price"}, status=400)
-                product.price = price
-            except:
-                return Response({"error": "Price must be number"}, status=400)
-
-        product.save()
-        return Response(ProductSerializer(product).data)
-
-    def delete(self, request, pk):
-        product = self.get_object(pk)
-        if not product:
-            return Response({"error": "Not found"}, status=404)
-
-        if product.user != request.user:
-            return Response({"error": "Not allowed"}, status=403)
-
-        product.delete()
-        return Response({"message": "Deleted"})
-
-class LikeAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, product_id):
-        try:
-            like, created = Like.objects.get_or_create(
-                user=request.user,
-                product_id=product_id
-            )
-
-            if not created:
-                like.delete()
-                return Response({"liked": False})
-
-            if product.user != request.user:
-                Notification.objects.create(
-                    user=product.user,
-                    message=f"{request.user.username} liked your product"
-                )
-
-            return Response({"liked": True})
-
-        except Exception:
-            return Response({"error": "Invalid request"}, status=400)
-
-class CommentCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        try:
-            content = request.data.get('content')
-            product_id = request.data.get('product')
-
-            if not content:
-                return Response({"error": "Comment cannot be empty"}, status=400)
-
-            comment = Comment.objects.create(
-                content=content,
-                product_id=product_id,
-                user=request.user
-            )
-
-            if product.user != request.user:
-                Notification.objects.create(
-                    user=product.user,
-                    message=f"{request.user.username} commented on your product"
-                )
-
-            return Response(CommentSerializer(comment).data, status=201)
-
-        except Exception:
-            return Response({"error": "Invalid data"}, status=400)
-
-class ProductListAPIView(APIView):
-    def get(self, request):
-        search = request.GET.get('search')
-
-        products = Product.objects.all()
-
-        if search:
-            products = products.filter(name__icontains=search)
-
-        serializer = ProductSerializer(products, many=True)
-        return Response(serializer.data)
+        return Response({"status": "purchased"})
 
 class ProductListAPIView(APIView):
     def get(self, request):
@@ -231,40 +194,49 @@ class ProductListAPIView(APIView):
         if my_products == "true" and request.user.is_authenticated:
             products = products.filter(user=request.user)
 
-        serializer = ProductSerializer(products, many=True)
+        serializer = ProductSerializer(products, many=True, context={"request": request})
         return Response(serializer.data)
 
-class NotificationListAPIView(APIView):
+class NotificationList(generics.ListAPIView):
+    serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        notifications = Notification.objects.filter(
-            user=request.user
-        ).order_by('-created_at')
+    def get_queryset(self):
+        return Notification.objects.filter(
+            to_user=self.request.user
+        ).order_by("-created_at")
 
-        data = [
-            {
-                "id": n.id,
-                "message": n.message,
-                "is_read": n.is_read,
-                "created_at": n.created_at
-            }
-            for n in notifications
-        ]
-
-        return Response(data)
-
-class NotificationReadAPIView(APIView):
+class MarkNotificationRead(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        try:
-            notification = Notification.objects.get(
-                pk=pk,
-                user=request.user
-            )
-            notification.is_read = True
-            notification.save()
-            return Response({"message": "Marked as read"})
-        except Notification.DoesNotExist:
-            return Response({"error": "Not found"}, status=404)
+        n = Notification.objects.get(pk=pk, to_user=request.user)
+        n.status = "read"
+        n.save()
+        return Response({"status":"read"})
+
+class LikeHistory(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Like.objects.select_related("product").filter(user=request.user)
+        return Response([{"product": l.product.name} for l in qs])
+
+class CommentHistory(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Comment.objects.select_related("product").filter(user=request.user)
+        return Response([{"product": c.product.name, "content": c.content} for c in qs])
+
+class TransactionHistory(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Transaction.objects.select_related("product").filter(Q(sender=request.user) | Q(receiver=request.user))
+        return Response([{
+            "product": t.product.name if t.product else None,
+            "amount": t.amount,
+            "type": t.tx_type,
+            "date": t.created_at
+        } for t in qs])
