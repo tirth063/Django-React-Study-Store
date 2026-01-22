@@ -1,18 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { Link} from 'react-router-dom';
 import { Cookies } from 'react-cookie';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from './api';
 import { Modal, Button } from 'react-bootstrap';
-function Home() {
+function ProductDetail() {
   const cookies = new Cookies();
-  const [products, setProducts] = useState([]);
-  const [search, setSearch] = useState('');
+  const { id } = useParams();
+  const [product, setProduct] = useState(null);
+  const [comment, setComment] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const user = cookies.get('user');
+  const [modalType, setModalType] = useState('');
+  // const user = cookies.get('user');
+  const user = {id:1,username:"tirth",email:"tirth@gmail.com",balance:10000};
+  const navigate = useNavigate();
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    loadProduct();
+  }, [id]);
 
   const dummyProducts = [
       {
@@ -141,74 +145,91 @@ function Home() {
       }
     ];
 
-  const loadProducts = async () => {
+  const loadProduct = async () => {
     try {
       // const res = await api.get(`products/public/`);
-      // setProducts(res.data);
-      setProducts(dummyProducts);
+      // const found = res.data.find(p => p.id === parseInt(id));
+      const found = dummyProducts.find(p => p.id === parseInt(id));
+      setProduct(found);
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleLike = async (productId) => {
+  const handleComment = async (e) => {
+    e.preventDefault();
     if (!user) {
+      setModalType('comment');
       setShowModal(true);
       return;
     }
     try {
-      await api.post(`products/${productId}/like/`);
-      loadProducts();
+      await api.post(`products/${id}/comment/`, { content: comment });
+      setComment('');
+      loadProduct();
     } catch (err) {
       console.error(err);
     }
   };
 
-  const filtered = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.user.username.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleBuy = async () => {
+    if (!user) {
+      setModalType('buy');
+      setShowModal(true);
+      return;
+    }
+    try {
+      await api.post(`products/${id}/buy/`);
+      alert('Product purchased successfully!');
+      navigate('/');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Purchase failed');
+    }
+  };
+
+  if (!product) return <div className="container mt-5">Loading...</div>;
 
   return (
     <div className="container mt-4">
-      <h2 className="mb-4">Products</h2>
-      <input
-        type="text"
-        className="form-control mb-4"
-        placeholder="Search by product or username..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-      
-      <div className="row g-4">
-        {filtered.map(product => (
-          <div key={product.id} className="col-md-4">
-            <div className="card h-100 shadow-sm">
-              <img
-                src={product.image}
-                className="card-img-top"
-                style={{ height: '200px', objectFit: 'cover' }}
-                alt={product.name}
-              />
-              <div className="card-body">
-                <h5 className="card-title">{product.name}</h5>
-                <p className="text-muted mb-2">
-                  <i className="bi bi-person"></i> {product.user.username}
-                </p>
-                <p className="card-text">{product.desc.substring(0, 100)}...</p>
-                <h6 className="text-success">${product.price}</h6>
-                <div className="d-flex justify-content-between align-items-center">
-                  <button
-                    className="btn btn-sm btn-outline-danger"
-                    onClick={() => handleLike(product.id)}
-                  >
-                    <i className={`bi bi-heart${product.is_liked_by_user ? '-fill' : ''}`}></i> {product.like_count}
-                  </button>
-                  <Link to={`/product/${product.id}`} className="btn btn-sm btn-primary">
-                    View Details
-                  </Link>
-                </div>
-              </div>
+      <div className="row">
+        <div className="col-md-6">
+          <img
+            src={product.image}
+            className="img-fluid rounded"
+            alt={product.name}
+          />
+        </div>
+        <div className="col-md-6">
+          <h2>{product.name}</h2>
+          <p className="text-muted">By {product.user.username}</p>
+          <h4 className="text-success">${product.price}</h4>
+          <p className="mt-3">{product.desc}</p>
+          <button className="btn btn-success btn-lg" onClick={handleBuy}>
+            <i className="bi bi-cart"></i> Buy Now
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <h4>Comments ({product.comment_count})</h4>
+        <form onSubmit={handleComment} className="mb-4">
+          <textarea
+            className="form-control mb-2"
+            rows="3"
+            placeholder="Add a comment..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            required
+          ></textarea>
+          <button type="submit" className="btn btn-primary">Post Comment</button>
+        </form>
+
+        {product.comments.map(c => (
+          <div key={c.id} className="card mb-3">
+            <div className="card-body">
+              <h6 className="card-subtitle mb-2">{c.user.username}</h6>
+              <p className="card-text">{c.content}</p>
+              <small className="text-muted">{new Date(c.created_at).toLocaleString()}</small>
             </div>
           </div>
         ))}
@@ -218,7 +239,9 @@ function Home() {
         <Modal.Header closeButton>
           <Modal.Title>Login Required</Modal.Title>
         </Modal.Header>
-        <Modal.Body>Please login to like products</Modal.Body>
+        <Modal.Body>
+          Please login to {modalType === 'buy' ? 'buy products' : 'add comments'}
+        </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
           <Link to="/login" className="btn btn-primary">Login</Link>
@@ -228,4 +251,4 @@ function Home() {
   );
 }
 
-export default Home;
+export default ProductDetail;
