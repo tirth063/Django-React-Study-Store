@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome User</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f4f8;
+            color: #333;
+            transition: background-color 0.5s ease;
+        }
+
+        .welcome-container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            transform: translateY(0);
+            transition: transform 0.5s ease, box-shadow 0.3s ease;
+        }
+
+        .welcome-container:hover {
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        h1 {
+            color: #4a4a4a;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            cursor: pointer;
+            border: none;
+            font-size: 1rem;
+        }
+
+        .cta-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="welcome-container" id="welcomeBox">
+        <h1 id="greeting">Welcome!</h1>
+        <p>Thank you for visiting our page. We hope you have a great experience.</p>
+        <button class="cta-button" onclick="changeMessage()">Get Started</button>
+        <p class="footer-note">A simple, single-file HTML page.</p>
+    </div>
+
+    <script>
+        function changeMessage() {
+            const greetingElement = document.getElementById('greeting');
+            const welcomeBox = document.getElementById('welcomeBox');
+            
+            greetingElement.textContent = 'You clicked the button!';
+            welcomeBox.style.transform = 'scale(1.05)';
+            setTimeout(() => {
+                welcomeBox.style.transform = 'scale(1)';
+            }, 300);
+        }
+
+        window.onload = () => {
+            const welcomeBox = document.getElementById('welcomeBox');
+            welcomeBox.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                welcomeBox.style.transform = 'translateY(0)';
+            }, 100);
+        };
+    </script>
+
+</body>
+</html>
+
+
