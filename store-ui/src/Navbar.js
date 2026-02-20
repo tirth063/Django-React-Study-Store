@@ -2,8 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Cookies } from 'react-cookie';
 function Navbar() {
   const cookies = new Cookies();
-//   const user = cookies.get('user');
-  const user = {id:1,username:"tirth",email:"tirth@gmail.com"};
+  const user = cookies.get('user');
   const navigate = useNavigate();
 
   const handleLogout = () => {

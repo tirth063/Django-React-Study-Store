@@ -8,54 +8,10 @@ function Notifications() {
     loadNotifications();
   }, []);
 
-      const dummyNotifications = [
-      {
-        id: 1,
-        message: "alice_smith liked your product",
-        from_user: { id: 2, username: "alice_smith" },
-        to_user: { id: 1, username: "john_doe" },
-        status: "unread",
-        created_at: "2024-01-22T10:30:00Z"
-      },
-      {
-        id: 2,
-        message: "bob_wilson commented on your product",
-        from_user: { id: 3, username: "bob_wilson" },
-        to_user: { id: 1, username: "john_doe" },
-        status: "unread",
-        created_at: "2024-01-22T09:15:00Z"
-      },
-      {
-        id: 3,
-        message: "john_doe bought your product",
-        from_user: { id: 1, username: "john_doe" },
-        to_user: { id: 2, username: "alice_smith" },
-        status: "read",
-        created_at: "2024-01-21T14:45:00Z"
-      },
-      {
-        id: 4,
-        message: "alice_smith liked your product",
-        from_user: { id: 2, username: "alice_smith" },
-        to_user: { id: 3, username: "bob_wilson" },
-        status: "read",
-        created_at: "2024-01-21T11:20:00Z"
-      },
-      {
-        id: 5,
-        message: "bob_wilson commented on your product",
-        from_user: { id: 3, username: "bob_wilson" },
-        to_user: { id: 1, username: "john_doe" },
-        status: "read",
-        created_at: "2024-01-20T16:30:00Z"
-      }
-    ];
-
   const loadNotifications = async () => {
     try {
-    //   const res = await api.get(`notifications/`);
-    //   setNotifications(res.data);
-    setNotifications(dummyNotifications);
+      const res = await api.get(`notifications/`);
+      setNotifications(res.data);
     } catch (err) {
       console.error(err);
     }

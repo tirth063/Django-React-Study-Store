@@ -2,8 +2,7 @@ import { Cookies } from 'react-cookie';
 
 function Profile() {
   const cookies = new Cookies();
-//   const user = cookies.get('user');
-  const user = {id:1,username:"tirth",email:"tirth@gmail.com",balance:10000};
+  const user = cookies.get('user');
 
   if (!user) return <div className="container mt-5">Please login</div>;
 
